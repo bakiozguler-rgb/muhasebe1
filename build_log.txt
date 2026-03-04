@@ -1,0 +1,6 @@
+
+> muhasebe@1.0.0 build-win
+> set DEBUG=electron-builder && electron-builder --win nsis -c.extraMetadata.main=build/electron.js
+
+'electron-builder' is not recognized as an internal or external command,
+operable program or batch file.
