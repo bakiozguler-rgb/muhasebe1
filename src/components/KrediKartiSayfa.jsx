@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, fmt, fmtDate } from "../veri";
-import { KrediKartiEkleForm, IslemEkleForm } from "./Modaller";
+import { KrediKartiEkleForm } from "./Modaller";
 
 export default function KrediKartiSayfa({ data, guncelle, bildir, setModal, setSilinecek }) {
   const [secili, setSecili] = useState(null);
@@ -27,12 +27,6 @@ export default function KrediKartiSayfa({ data, guncelle, bildir, setModal, setS
     }));
     bildir("Kart güncellendi."); setModal(null);
     setSecili(prev => prev?.id === id ? { ...prev, ...veri } : prev);
-  };
-
-  const harcamaEkle = (kartId, islem) => {
-    // Bakiyeyi App.js/islemBakiyeEtkisi yönetiyor, biz sadece işlemi ekliyoruz.
-    guncelle(d => ({ ...d, islemler: [...d.islemler, { ...islem, id: uid() }] }));
-    bildir("İşlem kaydedildi."); setModal(null);
   };
 
   const kartSil = (id) => {
