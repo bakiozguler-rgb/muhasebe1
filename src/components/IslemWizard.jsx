@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { uid, today, fmt, tumHesaplar, harcamaHesaplari, gelirHesaplari } from "../veri";
+import { uid, today, fmt, tumHesaplar, harcamaHesaplari } from "../veri";
 import Calculator from "./Calculator";
 
 export default function IslemWizard({ data, guncelle, bildir, onKaydet, onKapat, eskiIslem = null }) {

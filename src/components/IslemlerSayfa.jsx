@@ -114,7 +114,7 @@ export default function IslemlerSayfa({ data, guncelle, bildir, setSilinecek, on
       }
       return true;
     });
-  }, [data.islemler, baslangic, bitis, turFiltre, anaKatFiltre, altKatFiltre, hesapFiltre, arama]);
+  }, [data.islemler, data.kategoriler, baslangic, bitis, turFiltre, anaKatFiltre, altKatFiltre, hesapFiltre, arama]);
 
   // Dönem toplamları
   const topGelir = filtreliIslemler.filter(i => i.tur === "gelir").reduce((s, i) => s + i.miktar, 0);

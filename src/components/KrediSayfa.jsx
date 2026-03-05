@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, fmt, fmtDate, today, hesapBakiyeGuncelle } from "../veri";
-import { KrediEkleForm, IslemEkleForm } from "./Modaller";
+import { KrediEkleForm } from "./Modaller";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // KREDİ İŞLEMLER MODAL
@@ -121,15 +121,6 @@ export function KrediSayfa({ data, guncelle, bildir, setModal, setSilinecek }) {
       ),
     }));
     bildir("Kredi güncellendi.");
-    setModal(null);
-  };
-
-  const odemeYap = (krediId, islem) => {
-    guncelle(d => ({
-      ...d,
-      islemler: [...d.islemler, { ...islem, id: uid(), tur: "kredi_odeme", krediId }],
-    }));
-    bildir("Ödeme kaydedildi.");
     setModal(null);
   };
 

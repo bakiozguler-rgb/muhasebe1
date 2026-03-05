@@ -72,7 +72,7 @@ export function RaporlarSayfa({ data }) {
 
   // ── Vadeli Borçlar ──
   const bugunStr = today();
-  const { bitis: buAySonuTarihi, baslangic: buAyBaslangici } = getButceDonemi(bugunStr, maasGunu);
+  const { bitis: buAySonuTarihi } = getButceDonemi(bugunStr, maasGunu);
 
   let vadeliIslemler = [];
 
