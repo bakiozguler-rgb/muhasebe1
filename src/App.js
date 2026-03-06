@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { STORAGE_KEY, uid, fmt, defaultData, today, toYMD } from "./veri";
+import { STORAGE_KEY, uid, fmt, defaultData, today, toYMD, hesaplaKartBorc } from "./veri";
 import css from "./stiller";
 import IslemWizard from "./components/IslemWizard";
 import IslemlerSayfa from "./components/IslemlerSayfa";
@@ -38,7 +38,7 @@ export default function App() {
           }
           return i;
         });
-        setData({ ...defaultData, ...parsed, islemler: temizIslemler, transferler: parsed.transferler || [] });
+        setData({ ...defaultData, ...parsed, islemler: temizIslemler, transferler: parsed.transferler || [], mutabakatIslemleri: parsed.mutabakatIslemleri || [] });
       } else {
         setData(defaultData);
       }
@@ -84,8 +84,7 @@ export default function App() {
       } else if (islem.hesapTur === "banka") {
         yeniData = { ...yeniData, bankaHesaplar: yeniData.bankaHesaplar.map(h => h.id === islem.hesapId ? { ...h, bakiye: (h.bakiye || 0) + (isParaGirisi ? tutar : (isParaCikisi ? -tutar : 0)) } : h) };
       } else if (islem.hesapTur === "krediKarti") {
-        // Normal kredi kartı harcaması (gider olmalı veya alacak_dogus - nakit avans gibi ama genellikle gider)
-        yeniData = { ...yeniData, krediKartlari: yeniData.krediKartlari.map(k => k.id === islem.hesapId ? { ...k, kullanilanLimit: (k.kullanilanLimit || 0) + tutar } : k) };
+        // Kredi kartı borcu işlemlerden hesaplanır, bakiye güncellemesi yapılmaz
       }
     }
 
@@ -98,13 +97,7 @@ export default function App() {
         yeniData = { ...yeniData, bankaHesaplar: yeniData.bankaHesaplar.map(h => h.id === islem.hesapId ? { ...h, bakiye: (h.bakiye || 0) - tutar } : h) };
       }
 
-      // Kart borcunu düş
-      if (islem.tur === "kk_odeme" && islem.kartId) {
-        yeniData = {
-          ...yeniData,
-          krediKartlari: yeniData.krediKartlari.map(k => k.id === islem.kartId ? { ...k, kullanilanLimit: (k.kullanilanLimit || 0) - tutar } : k)
-        };
-      }
+      // Kart borcu işlemlerden hesaplanır, bakiye güncellemesi yapılmaz
 
       // Kredi borcunu düş
       if (islem.tur === "kredi_odeme" && islem.krediId) {
@@ -263,6 +256,45 @@ export default function App() {
     bildir("İşlem güncellendi.");
   };
 
+  // ─── Mutabakat ────────────────────────────────────────────────────────────
+  const mutabakatUygula = (d, islem, carpan) => {
+    const m = Number(islem.miktar) * carpan;
+    let yeni = { ...d };
+    if (islem.hedefTur === "nakit") {
+      const delta = islem.yon === "giris" ? m : -m;
+      yeni = { ...yeni, nakitHesaplar: yeni.nakitHesaplar.map(h => h.id === islem.hedefId ? { ...h, bakiye: (h.bakiye || 0) + delta } : h) };
+    } else if (islem.hedefTur === "banka") {
+      const delta = islem.yon === "giris" ? m : -m;
+      yeni = { ...yeni, bankaHesaplar: yeni.bankaHesaplar.map(h => h.id === islem.hedefId ? { ...h, bakiye: (h.bakiye || 0) + delta } : h) };
+    } else if (islem.hedefTur === "krediKarti") {
+      // giris = borç azalır → bakiyeDuzeltme eksilir; cikis = borç artar
+      const delta = islem.yon === "giris" ? -m : m;
+      yeni = { ...yeni, krediKartlari: yeni.krediKartlari.map(k => k.id === islem.hedefId ? { ...k, bakiyeDuzeltme: (k.bakiyeDuzeltme || 0) + delta } : k) };
+    } else if (islem.hedefTur === "kredi") {
+      const delta = islem.yon === "giris" ? -m : m;
+      yeni = { ...yeni, krediler: yeni.krediler.map(k => k.id === islem.hedefId ? { ...k, kalanBorc: (k.kalanBorc || 0) + delta } : k) };
+    }
+    return yeni;
+  };
+
+  const mutabakatEkle = (islem) => {
+    guncelle(d => {
+      const yeni = mutabakatUygula(d, islem, 1);
+      return { ...yeni, mutabakatIslemleri: [...(yeni.mutabakatIslemleri || []), { ...islem, id: uid() }] };
+    });
+    bildir("Mutabakat kaydı eklendi.");
+  };
+
+  const mutabakatSil = (islemId) => {
+    guncelle(d => {
+      const islem = (d.mutabakatIslemleri || []).find(i => i.id === islemId);
+      if (!islem) return d;
+      const yeni = mutabakatUygula(d, islem, -1);
+      return { ...yeni, mutabakatIslemleri: yeni.mutabakatIslemleri.filter(i => i.id !== islemId) };
+    });
+    bildir("Mutabakat kaydı silindi.", "uyari");
+  };
+
   if (!data) return (
     <div style={{ background: "#060c1a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ color: "#c9a84c", fontFamily: "serif", fontSize: 24 }}>Yükleniyor...</div>
@@ -270,11 +302,11 @@ export default function App() {
   );
 
   // ─── Hesaplamalar ─────────────────────────────────────────────────────
-  const hFiltre = (h) => !(h.pasif && h.toplamaDahil === false);
+  const hFiltre = (h) => !h.pasif || h.toplamaDahil === true;
 
   const toplamNakit = data.nakitHesaplar.filter(hFiltre).reduce((s, h) => s + (parseFloat(h.bakiye) || 0), 0);
   const toplamBanka = data.bankaHesaplar.filter(hFiltre).reduce((s, h) => s + (parseFloat(h.bakiye) || 0), 0);
-  const toplamKKBorc = data.krediKartlari.filter(hFiltre).reduce((s, k) => s + (parseFloat(k.kullanilanLimit) || 0), 0);
+  const toplamKKBorc = data.krediKartlari.filter(hFiltre).reduce((s, k) => s + hesaplaKartBorc(k.id, data.islemler, k.bakiyeDuzeltme || 0), 0);
   const toplamKrediBorc = data.krediler.filter(hFiltre).reduce((s, k) => s + (parseFloat(k.kalanBorc) || 0), 0);
   const toplamAlacak = data.borcAlacaklar.filter(b => b.tur === "alacak" && hFiltre(b)).reduce((s, b) => s + (parseFloat(b.miktar) || 0), 0);
   const toplamBorc = data.borcAlacaklar.filter(b => b.tur === "borc" && hFiltre(b)).reduce((s, b) => s + (parseFloat(b.miktar) || 0), 0);
@@ -302,7 +334,8 @@ export default function App() {
     transferler: <TransferlerSayfa data={data} guncelle={guncelle} bildir={bildir} setSilinecek={setSilinecek} />,
 
     nakit: <HesapSayfa baslik="Nakit Hesaplar" hesaplar={data.nakitHesaplar} hesapTur="nakit"
-      data={data} guncelle={guncelle} bildir={bildir} setModal={setModal} setSilinecek={setSilinecek} />,
+      data={data} guncelle={guncelle} bildir={bildir} setModal={setModal} setSilinecek={setSilinecek}
+      mutabakatIslemleri={data.mutabakatIslemleri || []} mutabakatEkle={mutabakatEkle} mutabakatSil={mutabakatSil} />,
     banka: <HesapSayfa baslik="Banka Hesapları" hesaplar={data.bankaHesaplar} hesapTur="banka"
       data={data} guncelle={guncelle} bildir={bildir} setModal={setModal} setSilinecek={setSilinecek} />,
 
@@ -313,7 +346,8 @@ export default function App() {
     borcalacak: <BorcAlacakSayfa data={data} guncelle={guncelle} bildir={bildir}
       setModal={setModal} setSilinecek={setSilinecek} />,
     kategoriler: <KategorilerSayfa data={data} guncelle={guncelle} bildir={bildir} setModal={setModal} />,
-    raporlar: <RaporlarSayfa data={data} />,
+    raporlar: <RaporlarSayfa data={data} guncelle={guncelle} bildir={bildir}
+      islemBakiyeEtkisi={islemBakiyeEtkisi} islemSil={islemSil} />,
     ayarlar: <AyarlarSayfa data={data} guncelle={guncelle} bildir={bildir} />,
   };
 
@@ -396,7 +430,7 @@ export default function App() {
         )}
 
         {wizardAcik && (
-          <IslemWizard data={data} guncelle={guncelle} bildir={bildir} onKaydet={wizardKaydet} onKapat={() => setWizardAcik(false)} />
+          <IslemWizard data={data} guncelle={guncelle} bildir={bildir} onKaydet={wizardKaydet} onKapat={() => setWizardAcik(false)} mutabakatEkle={mutabakatEkle} />
         )}
       </div>
     </>

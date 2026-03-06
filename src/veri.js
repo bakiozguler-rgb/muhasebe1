@@ -44,6 +44,9 @@ export const defaultData = {
   borcAlacaklar: [],
   islemler: [],
   transferler: [],
+  mutabakatIslemleri: [],
+  sabitOdemeler: [],
+  projeler: [],
   ayarlar: { maasGunu: 1 },
 };
 
@@ -72,12 +75,29 @@ export function getButceDonemi(tarihStr, maasGunu = 1) {
   };
 }
 
+// Kredi kartı borcunu işlemlerden hesapla: Σ harcama - Σ ödeme + bakiyeDüzeltme
+// bitisTarihi verilirse sadece o tarihe kadar olan işlemler sayılır (güncel borç)
+// bitisTarihi null ise tüm işlemler sayılır (toplam borç)
+export function hesaplaKartBorc(kartId, islemler, bakiyeDuzeltme = 0, bitisTarihi = null) {
+  let borc = bakiyeDuzeltme;
+  islemler.forEach(i => {
+    if (bitisTarihi && i.tarih > bitisTarihi) return;
+    if (i.hesapId === kartId && i.tur !== "kk_odeme") {
+      borc += Number(i.miktar) || 0;
+    }
+    if (i.tur === "kk_odeme" && i.kartId === kartId) {
+      borc -= Number(i.miktar) || 0;
+    }
+  });
+  return borc;
+}
+
 // Tüm para hesaplarını düz liste olarak döner (transfer için)
 export function tumHesaplar(data) {
   return [
     ...data.nakitHesaplar.filter(h => !h.pasif).map(h => ({ ...h, hesapTur: "nakit", etiket: `💵 ${h.ad}` })),
     ...data.bankaHesaplar.filter(h => !h.pasif).map(h => ({ ...h, hesapTur: "banka", etiket: `🏦 ${h.ad}` })),
-    ...data.krediKartlari.filter(h => !h.pasif).map(h => ({ ...h, hesapTur: "krediKarti", etiket: `💳 ${h.ad}`, bakiye: -(h.kullanilanLimit || 0) })),
+    ...data.krediKartlari.filter(h => !h.pasif).map(h => ({ ...h, hesapTur: "krediKarti", etiket: `💳 ${h.ad}`, bakiye: -hesaplaKartBorc(h.id, data.islemler, h.bakiyeDuzeltme || 0, today()) })),
     ...data.krediler.map(h => ({ ...h, hesapTur: "kredi", etiket: `📋 ${h.ad}`, bakiye: -(h.kalanBorc || 0) })),
   ];
 }
