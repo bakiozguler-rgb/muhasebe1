@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, today, gelirHesaplari, harcamaHesaplari, fmt, katIkon, tumHesaplar } from "../veri";
+import { uid, today, gelirHesaplari, harcamaHesaplari, fmt, katIkon, tumHesaplar, hesaplaKartBorc } from "../veri";
 
 // Yardımcı fonksiyonlar (Para formatlamak için)
 const formatliMiktar = (deger) => {
@@ -183,7 +183,7 @@ export function IslemEkleForm({ tur, hesapAdi, data, onKaydet, onIptal, sabitMik
             <select className="input" value={f.kartId} onChange={e => setF({ ...f, kartId: e.target.value })}>
               <option value="">— Kart Seçiniz —</option>
               {data.krediKartlari.filter(k => !k.pasif).map(k => (
-                <option key={k.id} value={k.id}>💳 {k.ad} ({fmt(k.kullanilanLimit)} ₺ Borç)</option>
+                <option key={k.id} value={k.id}>💳 {k.ad} ({fmt(hesaplaKartBorc(k.id, data.islemler, k.bakiyeDuzeltme || 0, today()))} ₺ Borç)</option>
               ))}
             </select>
           </div>
@@ -194,7 +194,7 @@ export function IslemEkleForm({ tur, hesapAdi, data, onKaydet, onIptal, sabitMik
             <select className="input" value={f.krediId} onChange={e => setF({ ...f, krediId: e.target.value })}>
               <option value="">— Kredi Seçiniz —</option>
               {data.krediler.filter(k => !k.pasif && (k.kalanBorc || 0) > 0).map(k => (
-                <option key={k.id} value={k.id}>🏦 {k.ad} ({fmt(k.kullanilanLimit)} ₺ Borç)</option>
+                <option key={k.id} value={k.id}>🏦 {k.ad} ({fmt(k.kalanBorc)} ₺ Borç)</option>
               ))}
             </select>
           </div>
@@ -268,7 +268,7 @@ export function KrediKartiEkleForm({ onKaydet, onIptal, mevcutVeri }) {
           />
         </div>
         <div className="form-grup">
-          <label>Güncel Borç (₺)</label>
+          <label>{duzenle ? "Bakiye Düzeltme (₺)" : "Başlangıç Borcu (₺)"}</label>
           <input
             type="text"
             className="input"
